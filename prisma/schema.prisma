@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                Int               @id @default(autoincrement())
+  email             String            @unique
+  username          String            @unique
+  phone             String?
+  password          String
+  inviteCode        String?
+  referralCode      String            @unique// User's own referral code
+  referredById      Int?              // ID of user who referred this user
+  name              String?
+  walletAddress     String?
+  walletNetwork     String?
+  country           String?
+  profilePicture    String?
+  balance           Float             @default(0)
+  level             Int               @default(1)
+  completedTasks    Int               @default(0)
+  isActive          Boolean           @default(true)
+  
+  // Relations
+  referredBy        User?             @relation("UserReferrals", fields: [referredById], references: [id])
+  referrals         User[]            @relation("UserReferrals")
+  deposits          Deposit[]
+  withdrawals       Withdrawal[]
+  taskSubmissions   TaskSubmission[]
+  userTaskOverrides UserTaskOverride[]
+  referralBonuses   ReferralBonus[]   @relation("UserReferralBonuses")
+  bonusesEarned     ReferralBonus[]   @relation("ReferrerBonuses")
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model ReferralBonus {
+  id              Int      @id @default(autoincrement())
+  referrerId      Int      // User who gets the bonus
+  referredUserId  Int      // User who generated the profit
+  taskSubmissionId Int     // The task that generated the profit
+  bonusAmount     Float    // 25% of the profit
+  
+  referrer        User     @relation("ReferrerBonuses", fields: [referrerId], references: [id])
+  referredUser    User     @relation("UserReferralBonuses", fields: [referredUserId], references: [id])
+  taskSubmission  TaskSubmission @relation(fields: [taskSubmissionId], references: [id])
+  
+  createdAt       DateTime @default(now())
+}
+
+model Deposit {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  network       String
+  walletAddress String
+  amount        Float
+  status        String   @default("pending") // pending, completed, failed
+  txHash        String?
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model Withdrawal {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  network       String
+  walletAddress String
+  amount        Float
+  status        String   @default("pending") // pending, approved, rejected, completed
+  adminNote     String?
+  user          User     @relation(fields: [userId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Admin {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  username  String   @unique
+  password  String
+  name      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id              Int               @id @default(autoincrement())
+  name            String
+  image           String?
+  price           Float
+  negativeAmount  Float             // Amount debited from user balance
+  startDate       DateTime          @default(now())
+  endDate         DateTime
+  isActive        Boolean           @default(true)
+  taskSubmissions TaskSubmission[]
+  userTaskOverrides UserTaskOverride[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model TaskSubmission {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  productId       Int
+  profitEarned    Float
+  amountDebited   Float
+  user            User     @relation(fields: [userId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id])
+  referralBonuses ReferralBonus[]
+  createdAt       DateTime @default(now())
+}
+
+model UserTaskOverride {
+  id             Int     @id @default(autoincrement())
+  userId         Int
+  productId      Int
+  negativeAmount Float   // Override negative amount for specific user
+  user           User    @relation(fields: [userId], references: [id])
+  product        Product @relation(fields: [productId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@unique([userId, productId])
+}
