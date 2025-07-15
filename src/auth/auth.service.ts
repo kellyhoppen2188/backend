@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  NotFoundException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../prisma/prisma.service";
@@ -58,7 +59,7 @@ export class AuthService {
         password: hashedPassword,
         referredById,
         inviteCode: data.inviteCode,
-        referralCode: randomBytes(8).toString("hex").toUpperCase(), // Generate unique referral code
+        referralCode: randomBytes(8).toString("hex").toUpperCase().slice(0, 7), // Generate unique referral code
       },
     });
 
@@ -79,10 +80,6 @@ export class AuthService {
       where: { username },
     });
 
-    // console.log("user", user);
-
-    // console.log("comparison", await bcrypt.compare(password, user.password));
-
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException("Invalid credentials");
     }
@@ -99,32 +96,83 @@ export class AuthService {
     };
   }
 
-  async resendCredentials(email: string) {
+  async forgotPassword(email: string) {
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
 
     if (!user) {
-      throw new UnauthorizedException("User not found");
+      // For security, don't reveal if email exists or not
+      return {
+        message:
+          "If an account with that email exists, we've sent a password reset link.",
+      };
     }
 
-    // Generate new password
-    const newPassword = Math.random().toString(36).slice(-8);
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-    // Update user password
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { password: hashedPassword },
+    // Invalidate any existing reset tokens for this user
+    await this.prisma.passwordReset.updateMany({
+      where: {
+        userId: user.id,
+        used: false,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+      data: {
+        used: true,
+      },
     });
 
-    // Send email
-    await this.emailService.sendLoginCredentials(
-      user.email,
-      user.username,
-      newPassword
-    );
+    // Generate new reset token
+    const resetToken = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
-    return { message: "New credentials sent to your email." };
+    await this.prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        token: resetToken,
+        expiresAt,
+      },
+    });
+
+    // Send reset email
+    await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+
+    return {
+      message:
+        "If an account with that email exists, we've sent a password reset link.",
+    };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const passwordReset = await this.prisma.passwordReset.findUnique({
+      where: { token },
+      include: { user: true },
+    });
+
+    if (
+      !passwordReset ||
+      passwordReset.used ||
+      passwordReset.expiresAt < new Date()
+    ) {
+      throw new BadRequestException("Invalid or expired reset token");
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password and mark token as used
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: passwordReset.userId },
+        data: { password: hashedPassword },
+      }),
+      this.prisma.passwordReset.update({
+        where: { id: passwordReset.id },
+        data: { used: true },
+      }),
+    ]);
+
+    return { message: "Password reset successfully." };
   }
 }

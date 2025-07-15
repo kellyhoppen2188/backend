@@ -23,8 +23,16 @@ export class AuthController {
     return this.authService.login(loginDto.username, loginDto.password);
   }
 
-  @Post("resend-credentials")
-  resendCredentials(@Body() resendDto: { email: string }) {
-    return this.authService.resendCredentials(resendDto.email);
+  @Post("forgot-password")
+  forgotPassword(@Body() forgotPasswordDto: { email: string }) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post("reset-password")
+  resetPassword(@Body() resetPasswordDto: { token: string; password: string }) {
+    return this.authService.resetPassword(
+      resetPasswordDto.token,
+      resetPasswordDto.password
+    );
   }
 }

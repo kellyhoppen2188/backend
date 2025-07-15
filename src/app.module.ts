@@ -23,12 +23,12 @@ import { TasksModule } from "./tasks/tasks.module";
       rootPath: join(__dirname, "..", "uploads"),
       serveRoot: "/uploads",
     }),
-    CacheModule.register({
-      isGlobal: true,
-      store: redisStore,
-      host: "localhost",
-      port: 6379,
-    }),
+    // CacheModule.register({
+    //   isGlobal: true,
+    //   store: redisStore,
+    //   host: "localhost",
+    //   port: 6379,
+    // }),
     PrismaModule,
     AuthModule,
     AdminModule,
