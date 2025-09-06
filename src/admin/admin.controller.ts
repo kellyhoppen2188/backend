@@ -93,4 +93,13 @@ export class AdminController {
   ) {
     return this.adminService.updateUserWallet(userId, data);
   }
+
+  @Patch("users/:id/password")
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  async changeUserPassword(
+    @Param("id", ParseIntPipe) userId: number,
+    @Body() data: { password: string }
+  ) {
+    return this.adminService.changeUserPassword(userId, data.password);
+  }
 }

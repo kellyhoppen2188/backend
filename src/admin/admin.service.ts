@@ -164,6 +164,7 @@ export class AdminService {
         phone: true,
         balance: true,
         level: true,
+        email: true,
         completedTasks: true,
         createdAt: true,
       },
@@ -215,6 +216,23 @@ export class AdminService {
       data: {
         walletAddress: data.walletAddress,
         walletNetwork: data.walletNetwork,
+      },
+    });
+  }
+
+  async changeUserPassword(userId: number, newPassword: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new BadRequestException("User not found");
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+      select: {
+        id: true,
+        username: true,
+        email: true,
       },
     });
   }

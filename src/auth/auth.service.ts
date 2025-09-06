@@ -23,6 +23,7 @@ export class AuthService {
     phone: string;
     email: string;
     username: string;
+    password: string;
     inviteCode?: string;
   }) {
     const existing = await this.prisma.user.findFirst({
@@ -48,8 +49,7 @@ export class AuthService {
       }
     }
 
-    const password = Math.random().toString(36).slice(-8);
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(data.password, 10);
 
     const user = await this.prisma.user.create({
       data: {
@@ -59,19 +59,18 @@ export class AuthService {
         password: hashedPassword,
         referredById,
         inviteCode: data.inviteCode,
-        referralCode: randomBytes(8).toString("hex").toUpperCase().slice(0, 7), // Generate unique referral code
+        referralCode: randomBytes(8).toString("hex").toUpperCase().slice(0, 7),
       },
     });
 
-    await this.emailService.sendLoginCredentials(
-      data.email,
-      data.username,
-      password
-    );
-
     return {
-      message:
-        "User created successfully. Check your email for login credentials.",
+      message: "User created successfully.",
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        referralCode: user.referralCode,
+      },
     };
   }
 
@@ -102,30 +101,25 @@ export class AuthService {
     });
 
     if (!user) {
-      // For security, don't reveal if email exists or not
       return {
         message:
           "If an account with that email exists, we've sent a password reset link.",
       };
     }
 
-    // Invalidate any existing reset tokens for this user
+    // Invalidate existing reset tokens
     await this.prisma.passwordReset.updateMany({
       where: {
         userId: user.id,
         used: false,
-        expiresAt: {
-          gt: new Date(),
-        },
+        expiresAt: { gt: new Date() },
       },
-      data: {
-        used: true,
-      },
+      data: { used: true },
     });
 
     // Generate new reset token
     const resetToken = randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     await this.prisma.passwordReset.create({
       data: {
@@ -135,7 +129,6 @@ export class AuthService {
       },
     });
 
-    // Send reset email
     await this.emailService.sendPasswordResetEmail(user.email, resetToken);
 
     return {
@@ -158,10 +151,8 @@ export class AuthService {
       throw new BadRequestException("Invalid or expired reset token");
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user password and mark token as used
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: passwordReset.userId },

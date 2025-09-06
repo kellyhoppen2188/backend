@@ -105,25 +105,77 @@ export class UsersService {
       },
     });
   }
+  private getMaxTasksForLevel(level: number): number {
+    return level === 1 ? 33 : 38;
+  }
 
   async getUserDetails(userId: number) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        username: true,
-        name: true,
-        walletAddress: true,
-        phone: true,
-        walletNetwork: true,
-        country: true,
-        profilePicture: true,
-        balance: true,
-        deposits: { orderBy: { createdAt: "desc" } },
-        withdrawals: { orderBy: { createdAt: "desc" } },
-        createdAt: true,
+      include: {
+        referredBy: {
+          select: {
+            id: true,
+            username: true,
+            referralCode: true,
+          },
+        },
+        referrals: {
+          select: {
+            id: true,
+            username: true,
+            createdAt: true,
+          },
+        },
+        taskSubmissions: {
+          include: {
+            product: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+        deposits: {
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+        withdrawals: {
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+        referralBonuses: {
+          include: {
+            referrer: {
+              select: {
+                username: true,
+              },
+            },
+            taskSubmission: {
+              include: {
+                product: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
       },
     });
+
+    if (!user) {
+      throw new BadRequestException("User not found");
+    }
+
+    return {
+      ...user,
+      maxTasks: this.getMaxTasksForLevel(user.level),
+    };
   }
 }

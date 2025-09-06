@@ -12,7 +12,8 @@ export class AuthController {
       phone: string;
       email: string;
       username: string;
-      inviteCode: string;
+      password: string;
+      inviteCode?: string;
     }
   ) {
     return this.authService.signup(signupDto);
