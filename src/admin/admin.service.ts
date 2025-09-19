@@ -74,14 +74,21 @@ export class AdminService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new BadRequestException("User not found");
 
+    // Determine the new level based on balance
+    const newLevel = balance > 1000 ? 2 : user.level;
+
     return this.prisma.user.update({
       where: { id: userId },
-      data: { balance },
+      data: {
+        balance,
+        level: newLevel,
+      },
       select: {
         id: true,
         username: true,
         email: true,
         balance: true,
+        level: true,
       },
     });
   }
@@ -184,16 +191,27 @@ export class AdminService {
       const deposit = await tx.deposit.findUnique({ where: { id: depositId } });
       if (!deposit) throw new BadRequestException("Deposit not found");
 
+      // Get current user data
+      const user = await tx.user.findUnique({ where: { id: deposit.userId } });
+      if (!user) throw new BadRequestException("User not found");
+
+      // Calculate new balance and level
+      const newBalance = user.balance + deposit.amount;
+      const newLevel = newBalance > 1000 ? 2 : user.level;
+
       // Update deposit status
       const updatedDeposit = await tx.deposit.update({
         where: { id: depositId },
         data: { status: "completed" },
       });
 
-      // Update user balance
+      // Update user balance and level
       await tx.user.update({
         where: { id: deposit.userId },
-        data: { balance: { increment: deposit.amount } },
+        data: {
+          balance: newBalance,
+          level: newLevel,
+        },
       });
 
       return updatedDeposit;

@@ -72,14 +72,34 @@ export class ProductsService {
 
     const submittedIds = submittedProductIds.map((task) => task.productId);
 
-    return this.prisma.product.findMany({
-      where: {
-        isActive: true,
-        endDate: { gt: new Date() },
-        id: { notIn: submittedIds },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const [products, userOverrides] = await Promise.all([
+      this.prisma.product.findMany({
+        where: {
+          isActive: true,
+          endDate: { gt: new Date() },
+          id: { notIn: submittedIds },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      this.prisma.userTaskOverride.findMany({
+        where: { userId },
+        select: { productId: true, negativeAmount: true },
+      }),
+    ]);
+
+    // Create a map for quick override lookups
+    const overrideMap = new Map(
+      userOverrides.map((override) => [
+        override.productId,
+        override.negativeAmount,
+      ])
+    );
+
+    // Apply overrides to products
+    return products.map((product) => ({
+      ...product,
+      negativeAmount: overrideMap.get(product.id) ?? product.negativeAmount,
+    }));
   }
 
   async setUserTaskOverride(data: {
